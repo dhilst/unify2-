@@ -32,14 +32,14 @@ module Term = struct
     | _, _ -> -1
 end
 
-module Subst = struct
+module Unif = struct
   include Set.Make(struct 
-      type t = string * Term.t
+      type t = Term.t * Term.t
       let compare s1 s2 =
         let (v1, t1) = s1 in
         let (v2, t2) = s2 in
         Compare.(
-          String.compare v1 v2 >>
+          Term.compare v1 v2 >>
           Term.compare t1 t2)
     end)
 
@@ -48,7 +48,7 @@ module Subst = struct
     then fprintf f "{}"
     else 
       (fprintf f "{"; 
-       iter (fun (x, t) -> fprintf f "%s/%a; " x Term.pp t) ss;
+       iter (fun (t1, t2) -> fprintf f "%a/%a; " Term.pp t1 Term.pp t2) ss;
        fprintf f "}")
 
   let rec subst : t -> Term.t -> Term.t =
@@ -56,10 +56,13 @@ module Subst = struct
     match term with
     | Term.V x -> 
       fold
-        (fun (v, tsub) term ->
-           if String.equal x v
-           then tsub
-           else term)
+        (fun (t1, tsub) term ->
+           match t1 with
+           | V y -> if String.equal x y
+             then tsub
+             else term
+           | _ -> assert false
+        )
         subs
         term
     | Term.F (fname, args) ->
@@ -76,23 +79,31 @@ module Unify = struct
     | Error e  -> Error e 
     | Ok a -> f a
 
-  let rec unify : Term.t -> Term.t -> Subst.t result  =
-    fun t1 t2 ->
-      let open Term in
-      match t1, t2 with
-      | F (f1, args1), F (f2, args2) ->
-        if not (String.equal f1 f2)
-        then Error (sprintf "Error : %s <> %s" f1 f2)
-        else List.combine args1 args2 |>
-             List.fold_left
-               (fun rslt (arg1, arg2) ->
-                  let* unifier1 = rslt in
-                  let* unifier2 = unify arg1 arg2 in
-                  Ok (Subst.union unifier1 unifier2))
-               (Ok (Subst.empty))
-      | V x, V y ->
-        Ok (Subst.of_list [x, V y])
-      | _, _ -> Error "distinct term types"
+  let rec unify : Unif.t -> Unit.t result  =
+    fun unif ->
+    (* The [unif] is the unifcation problem, a set of (term * term)
+       it corresponts to G in https://en.wikipedia.org/wiki/Unification_(computer_science)#A_unification_algorithm *)
+    let open Term in
+    failwith "todo"
+      (* fold unif
+       * match t1, t2 with
+       * | F (f1, args1), F (f2, args2) ->
+       *   if not (String.equal f1 f2)
+       *   then Error (sprintf "Error : %s <> %s" f1 f2)
+       *   else List.combine args1 args2 |>
+       *        List.fold_left
+       *          (fun rslt (arg1, arg2) ->
+       *             let* unifier1 = rslt in
+       *             let* unifier2 = unify arg1 arg2 in
+       *             Ok (Subst.union unifier1 unifier2))
+       *          (Ok (Subst.empty))
+       * | V x, t2 ->
+       *   let unif = Subst.singleton (x, t2) in 
+       *   let t3 = Subst.subst unif t2 in
+       *   printf "---> %a%a => %a\n" pp t2 Subst.pp unif pp t3;
+       *   Ok (Subst.singleton (x, t3))
+       * | F (_, []), V _ -> unify t2 t1
+       * | _, _ -> Error "distinct term types" *)
 
   let pp ppf = function
     | Ok s -> fprintf ppf "Success : %a" Subst.pp s
